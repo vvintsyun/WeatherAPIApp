@@ -17,7 +17,6 @@ namespace WeatherAppAPI.Controllers
         }
 
         [HttpGet("{id}")]
-        //[EnableRateLimiting()]
         [RateLimit]
         public async Task<ActionResult<string>> Get(long id, CancellationToken ct)
         {

@@ -13,16 +13,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddScoped<IWeatherService, WeatherService>();
-//builder.Services.AddTransient<ClientSideRateLimitedHandlerTEST>();
-//builder.Services.ConfigureAll<HttpClientFactoryOptions>(options =>
-//{
-//    options.HttpMessageHandlerBuilderActions.Add(builder =>
-//    {
-//        builder.AdditionalHandlers.Add(builder.Services.GetRequiredService<ClientSideRateLimitedHandler>());
-//    });
-//});
 builder.Services.AddHttpClient("Weather");
-    //.AddHttpMessageHandler<ClientSideRateLimitedHandlerTEST>();
 
 builder.Logging.ClearProviders();
 ILogger logger = new LoggerConfiguration()
