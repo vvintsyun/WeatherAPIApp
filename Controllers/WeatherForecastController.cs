@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using WeatherAppAPI.RateLimits;
 using WeatherAppAPI.Services;
 
 namespace WeatherAppAPI.Controllers
@@ -17,8 +16,7 @@ namespace WeatherAppAPI.Controllers
         }
 
         [HttpGet("{id}")]
-        //[EnableRateLimiting()]
-        [RateLimit]
+        [EnableRateLimiting("rateLimiterPolicy")]
         public async Task<ActionResult<string>> Get(long id, CancellationToken ct)
         {
             var result = await _service.GetWeather(id, ct);
