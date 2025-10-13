@@ -13,7 +13,10 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddScoped<IWeatherService, WeatherService>();
-builder.Services.AddHttpClient("Weather");
+builder.Services.AddHttpClient("Weather", config =>
+{
+    config.BaseAddress = new Uri("http://api.openweathermap.org/data/2.5/");
+});
 
 builder.Logging.ClearProviders();
 ILogger logger = new LoggerConfiguration()
@@ -21,8 +24,12 @@ ILogger logger = new LoggerConfiguration()
     .CreateLogger();
 builder.Logging.AddSerilog(logger);
 
+var connectionString =
+    builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException("Connection string"
+        + "'DefaultConnection' not found.");
 builder.Services.AddDbContext<WeatherDbContext>(
-        options => options.UseSqlServer("Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=WeatherDB;Integrated Security=True;Connect Timeout=30;Encrypt=True;Trust Server Certificate=False;Application Intent=ReadWrite;Multi Subnet Failover=False"));
+        options => options.UseSqlServer(connectionString));
 
 builder.Services.AddDistributedSqlServerCache(options =>
 {

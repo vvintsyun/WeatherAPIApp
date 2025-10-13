@@ -1,6 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
-using System.Net;
 using WeatherAppAPI.Data;
 
 namespace WeatherAppAPI.RateLimits
@@ -8,16 +6,19 @@ namespace WeatherAppAPI.RateLimits
     public class RateLimitMiddleware
     {
         private readonly RequestDelegate _next;
-        private readonly IDistributedCache _cache;
+        private readonly RedisUserRateLimiter _rateLimiter;
+        private readonly ILogger<RateLimitMiddleware> _logger;
+        private readonly WeatherDbContext _dbContext;
 
-        public RateLimitMiddleware(RequestDelegate next,
-            IDistributedCache cache)
+        public RateLimitMiddleware(RequestDelegate next, RedisUserRateLimiter rateLimiter, ILogger<RateLimitMiddleware> logger, WeatherDbContext dbContext)
         {
             _next = next;
-            _cache = cache;
+            _rateLimiter = rateLimiter;
+            _logger = logger;
+            _dbContext = dbContext;
         }
 
-        public async Task InvokeAsync(HttpContext context, WeatherDbContext dbContext)
+        public async Task InvokeAsync(HttpContext context)
         {
             if (!context.HasRateLimitAttribute(out var decorator))
             {
@@ -25,7 +26,7 @@ namespace WeatherAppAPI.RateLimits
                 return;
             }
 
-            if (!context.Request.RouteValues.TryGetValue("id", out var id) 
+            if (!context.Request.RouteValues.TryGetValue("id", out var id)
                 || id is null)
             {
                 await _next(context);
@@ -37,24 +38,20 @@ namespace WeatherAppAPI.RateLimits
                 return;
             }
 
-            var userRate = await dbContext.Users
+            var userRate = await _dbContext.Users
                 .Where(x => x.Id == userId)
                 .Select(x => x.AllowedRate)
                 .FirstOrDefaultAsync(context.RequestAborted);
 
-            var consumptionData = await _cache.GetCustomerConsumptionDataFromContextAsync(context);
-            if (consumptionData is not null)
+            var rateCheck = await _rateLimiter.TryAcquireAsync(userId, userRate);
+            if (!rateCheck.Item1)
             {
-                if (consumptionData.HasConsumedAllRequests(TimeSpan.FromHours(1), userRate))
-                {
-                    context.Response.StatusCode = (int)HttpStatusCode.TooManyRequests;
-                    return;
-                }
-
-                consumptionData.IncreaseRequests(userRate);
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                context.Response.Headers.Append("XRateLimit-Limit", userRate.ToString());
+                context.Response.Headers.Append("RateLimit-Reset", rateCheck.Item2.ToString("o"));
+                await context.Response.WriteAsync("Too Many Requests. Please try again later.");
+                return;
             }
-
-            await _cache.SetCacheValueAsync(id.ToString(), consumptionData);
 
             await _next(context);
         }
