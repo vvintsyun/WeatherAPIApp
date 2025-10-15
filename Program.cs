@@ -4,6 +4,7 @@ using WeatherAppAPI.Services;
 using Serilog;
 using ILogger = Serilog.ILogger;
 using WeatherAppAPI.RateLimits;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,17 +27,15 @@ builder.Logging.AddSerilog(logger);
 
 var connectionString =
     builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? throw new InvalidOperationException("Connection string"
-        + "'DefaultConnection' not found.");
+        ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 builder.Services.AddDbContext<WeatherDbContext>(
         options => options.UseSqlServer(connectionString));
 
-builder.Services.AddDistributedSqlServerCache(options =>
-{
-    options.ConnectionString = "Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=WeatherDB;Integrated Security=True;Connect Timeout=30;Encrypt=True;Trust Server Certificate=False;Application Intent=ReadWrite;Multi Subnet Failover=False";
-    options.SchemaName = "dbo";
-    options.TableName = "UsedRatesCache";
-});
+var redisConnection = builder.Configuration.GetValue<string>("RedisConfig:ConnectionString") 
+    ?? throw new InvalidOperationException("Connection string 'RedisConfig' not found."); ;
+var redis = ConnectionMultiplexer.Connect(redisConnection);
+builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+builder.Services.AddSingleton<RedisUserRateLimiter>();
 
 var app = builder.Build();
 
@@ -46,7 +45,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-app.UseMiddleware<RateLimitMiddleware>();
+app.UseRateLimiter();
 
 app.UseHttpsRedirection();
 
